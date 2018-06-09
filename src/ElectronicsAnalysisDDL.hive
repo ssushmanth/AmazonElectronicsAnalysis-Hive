@@ -1,0 +1,75 @@
+CREATE DATABASE IF NOT EXISTS electronics;
+
+USE electronics;
+
+ADD JAR lib/hive-hcatalog-core-2.0.0.jar;
+
+DROP TABLE IF EXISTS amazon_reviews;
+CREATE TABLE amazon_reviews (
+reviewerID string,
+asin string,
+reviewerName string,
+helpful array<int>,
+reviewText string,
+overall float,
+summary string,
+unixReviewTime int,
+reviewTime string
+)
+ROW FORMAT SERDE 'org.apache.hive.hcatalog.data.JsonSerDe'
+STORED AS TEXTFILE;
+
+LOAD DATA LOCAL INPATH 'data/Reviews/Electronics_5.json' OVERWRITE INTO TABLE amazon_reviews;
+
+SET hive.enforce.bucketing = true;
+SET hive.exec.dynamic.partition=true;
+SET hive.exec.dynamic.partition.mode=nonstrict;
+SET hive.exec.max.dynamic.partitions=100;
+SET hive.exec.max.dynamic.partitions.pernode=100;
+
+DROP TABLE IF EXISTS reviews;
+CREATE TABLE reviews (
+reviewerID string,
+asin string,
+reviewerName string,
+helpful array<int>,
+reviewText string,
+overall float,
+summary string,
+unixReviewTime int,
+reviewTime string
+)
+PARTITIONED BY (reviewYear int)
+CLUSTERED BY (overall) INTO 5 BUCKETS
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',';
+
+INSERT INTO TABLE reviews PARTITION(reviewYear)
+SELECT reviewerID,asin,reviewerName,helpful,reviewText,overall,summary,unixReviewTime,reviewTime,year(from_unixtime(unix_timestamp(reviewTime, 'MM dd, yyyy')))
+FROM amazon_reviews;
+
+DROP TABLE IF EXISTS amazon_ratings;
+CREATE TABLE amazon_ratings (
+user string,
+item string,
+rating float,
+timestamp int
+)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ','
+STORED AS TEXTFILE;
+
+LOAD DATA LOCAL INPATH 'data/Ratings/ratings_Electronics.csv' OVERWRITE INTO TABLE amazon_ratings;
+
+DROP TABLE IF EXISTS ratings;
+CREATE TABLE ratings (
+user string,
+item string,
+rating float,
+timestamp int
+)
+PARTITIONED BY (ratingYear int)
+CLUSTERED BY (rating) INTO 5 BUCKETS
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',';
+
+INSERT INTO TABLE ratings PARTITION(ratingYear)
+SELECT user,item,rating,timestamp,year(date_add(from_unixtime(timestamp),1))
+FROM amazon_ratings;

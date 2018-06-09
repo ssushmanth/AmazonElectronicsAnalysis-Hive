@@ -1,0 +1,54 @@
+USE electronics;
+
+SELECT r.ratingYear,r.item,r.review_count
+FROM  (SELECT rt.ratingYear,rt.item,rt.review_count,ROW_NUMBER() OVER(PARTITION BY rt.ratingYear ORDER BY rt.review_count DESC) AS item_rank
+FROM (SELECT rat.ratingYear,rat.item,AVG(rat.rating) AS avg_rating,COUNT(rev.reviewerID) AS review_count
+FROM (SELECT reviewYear,asin,reviewerID FROM reviews WHERE reviewYear >= 2006 AND reviewYear <= 2014) rev
+LEFT OUTER JOIN (SELECT ratingYear,item,user,rating FROM ratings WHERE ratingYear >= 2006 AND ratingYear <= 2014) rat
+ON rev.asin = rat.item AND rev.reviewerID = rat.user
+GROUP BY rat.ratingYear,rat.item ) rt
+WHERE avg_rating > CAST(3.0 AS FLOAT) ) r
+WHERE r.item_rank = 1;
+
+SELECT r.ratingYear,r.item,r.review_count
+FROM  (SELECT rt.ratingYear,rt.item,rt.review_count,ROW_NUMBER() OVER(PARTITION BY rt.ratingYear ORDER BY rt.review_count ASC) AS item_rank
+FROM (SELECT rat.ratingYear,rat.item,AVG(rat.rating) AS avg_rating,COUNT(rev.reviewerID) AS review_count
+FROM (SELECT reviewYear,asin,reviewerID FROM reviews WHERE reviewYear >= 2006 AND reviewYear <= 2014) rev
+LEFT OUTER JOIN (SELECT ratingYear,item,user,rating FROM ratings WHERE ratingYear >= 2006 AND ratingYear <= 2014) rat
+ON rev.asin = rat.item AND rev.reviewerID = rat.user
+GROUP BY rat.ratingYear,rat.item ) rt
+WHERE avg_rating < CAST(2.0 AS FLOAT) ) r
+WHERE r.item_rank = 1;
+
+SELECT rev.reviewYear,rev.reviewerID,COUNT(rev.reviewerID) AS review_count
+FROM reviews rev
+LEFT OUTER JOIN ratings rat
+ON rev.asin = rat.item AND rev.reviewerID = rat.user
+GROUP BY rev.reviewYear,rev.reviewerID
+ORDER BY review_count DESC LIMIT 1;
+
+SELECT r.ratingYear,r.item,r.avg_helpful_perc
+FROM  (SELECT rt.ratingYear,rt.item,rt.avg_helpful_perc,ROW_NUMBER() OVER(PARTITION BY rt.ratingYear ORDER BY rt.avg_helpful_perc ASC) AS helpful_perc_rank
+FROM (SELECT rat.ratingYear,rat.item,AVG((helpful[0] / helpful[1]) * 100) AS avg_helpful_perc
+FROM reviews rev
+LEFT OUTER JOIN ratings rat
+ON rev.asin = rat.item AND rev.reviewerID = rat.user
+GROUP BY rat.ratingYear,rat.item ) rt
+WHERE rt.avg_helpful_perc >= CAST(1.0 AS FLOAT) AND avg_helpful_perc <= CAST(30.0 AS FLOAT) ) r
+WHERE r.helpful_perc_rank = 1;
+
+SELECT r.ratingYear,r.item,r.avg_helpful_perc
+FROM  (SELECT rt.ratingYear,rt.item,rt.avg_helpful_perc,ROW_NUMBER() OVER(PARTITION BY rt.ratingYear ORDER BY rt.avg_helpful_perc DESC) AS helpful_perc_rank
+FROM (SELECT rat.ratingYear,rat.item,AVG((helpful[0] / helpful[1]) * 100) AS avg_helpful_perc
+FROM reviews rev
+LEFT OUTER JOIN ratings rat
+ON rev.asin = rat.item AND rev.reviewerID = rat.user
+GROUP BY rat.ratingYear,rat.item ) rt
+WHERE rt.avg_helpful_perc > CAST(75.0 AS FLOAT) ) r
+WHERE r.helpful_perc_rank = 1;
+
+SELECT r.asin,collect_list(r.year_count_map) AS Year_count
+FROM  (SELECT rev.asin,map(rev.reviewYear,COUNT(rev.reviewerID)) AS year_count_map
+FROM reviews rev
+GROUP BY rev.reviewYear,rev.asin) r
+GROUP BY r.asin;
